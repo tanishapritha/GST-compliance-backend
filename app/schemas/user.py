@@ -11,6 +11,9 @@ class UserCreate(UserBase):
 class UserLogin(UserBase):
     password: str
 
+class GoogleLoginRequest(BaseModel):
+    token: str
+
 class UserResponse(UserBase):
     id: int
     role: str

@@ -14,6 +14,15 @@ from app.schemas.invoice import InvoiceResponse, InvoiceDetail
 from app.core.config import settings
 from app.utils.file_utils import FileUtils
 
+# Redis Setup
+try:
+    redis_conn = Redis(host=settings.REDIS_HOST, port=settings.REDIS_PORT, socket_connect_timeout=1)
+    redis_conn.ping()
+    q = Queue(connection=redis_conn)
+except Exception as e:
+    print(f"Warning: Redis not connected. Background tasks will fail. {e}")
+    q = None
+
 router = APIRouter()
 
 @router.post("/upload", response_model=InvoiceResponse)
@@ -46,8 +55,11 @@ def upload_invoice(
     db.refresh(invoice)
 
     # Enqueue Job
-    from app.workers.ingestion_worker import process_invoice_job
-    q.enqueue(process_invoice_job, invoice.id)
+    if q:
+        from app.workers.ingestion_worker import process_invoice_job
+        q.enqueue(process_invoice_job, invoice.id)
+    else:
+        print("Redis queue not available. Skipping background job.")
 
     return invoice
 

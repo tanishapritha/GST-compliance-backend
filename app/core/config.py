@@ -12,19 +12,33 @@ class Settings(BaseSettings):
     POSTGRES_USER: str = os.getenv("POSTGRES_USER", "postgres")
     POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "password")
     POSTGRES_DB: str = os.getenv("POSTGRES_DB", "gst_compliance_db")
-    SQLALCHEMY_DATABASE_URI: Union[str, None] = None
+    SQLALCHEMY_DATABASE_URI: Union[str, None] = "sqlite:///./gst_compliance.db"
 
     @validator("SQLALCHEMY_DATABASE_URI", pre=True)
     def assemble_db_connection(cls, v: str | None, values: dict[str, any]) -> str:
-        if isinstance(v, str):
-            return v
-        return PostgresDsn.build(
-            scheme="postgresql",
-            username=values.get("POSTGRES_USER"),
-            password=values.get("POSTGRES_PASSWORD"),
-            host=values.get("POSTGRES_SERVER"),
-            path=f"{values.get('POSTGRES_DB') or ''}",
-        ).unicode_string()
+        host = values.get("POSTGRES_SERVER")
+        # DETECT RENDER INTERNAL URL (UNREACHABLE LOCALLY)
+        if host and "dpg-" in host and "render.com" not in host:
+            print("WARNING: Detected Render INTERNAL Hostname. This is unreachable locally.")
+            print("Falling back to SQLite for local testing.")
+            return "sqlite:///./gst_compliance.db"
+
+        # Fallback to SQLite if no Postgres env vars are set (or explicitly requested)
+        if host == "localhost" and values.get("POSTGRES_USER") == "postgres":
+             # If using default env vars, check if we want to fallback to sqlite easily
+             pass
+
+        try:
+            return PostgresDsn.build(
+                scheme="postgresql",
+                username=values.get("POSTGRES_USER"),
+                password=values.get("POSTGRES_PASSWORD"),
+                host=host,
+                path=f"{values.get('POSTGRES_DB') or ''}",
+            ).unicode_string()
+        except:
+             # Fallback to SQLite
+             return "sqlite:///./gst_compliance.db"
 
     # JWT
     SECRET_KEY: str = os.getenv("SECRET_KEY", "supersecretkeywhichshouldbechanged")
@@ -38,6 +52,9 @@ class Settings(BaseSettings):
 
     # UPLOAD
     UPLOAD_FOLDER: str = os.path.join(os.getcwd(), "uploads")
+
+    # GOOGLE AUTH
+    GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "YOUR_GOOGLE_CLIENT_ID")
 
     model_config = SettingsConfigDict(case_sensitive=True, env_file=".env")
 
